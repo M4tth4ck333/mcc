@@ -73,3 +73,36 @@ jobs:
       # Execute tests defined by the CMake configuration. Note that --build-config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
       # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
       run: ctest --build-config ${{ matrix.build_type }}
+# --- SYSTEMTUV CUSTOM TOOLCHAIN: lcc, mcc, cc65 ---
+
+LCC_DIR ?= external_repos/lcc
+MCC_DIR ?= external_repos/mcc
+CC65_DIR ?= external_repos/cc65
+
+DLC_FLAG := -DSYSTEM_DLC_MANIFEST=\"2fe9fc84431b4369d35cfdb3482920ebe7de1375\"
+
+.PHONY: toolchain-lcc toolchain-mcc toolchain-cc65
+
+toolchain-cc65: ## Kompiliert Low-Level-Komponenten mit cc65 (6502 Target)
+	@echo "[Toolchain] Starte cc65 Build..."
+	@if [ -d $(CC65_DIR) ]; then \
+		$(MAKE) -C $(CC65_DIR) bin; \
+		echo "[cc65] Binaries erfolgreich erstellt."; \
+	else \
+		echo "[cc65] Repository nicht gefunden. Bitte mit make clone-systemtuv-repos holen."; \
+	fi
+
+toolchain-lcc: ## Kompiliert den System-Kern mit lcc (ANSI C)
+	@echo "[Toolchain] Kompiliere mit lcc unter DLC-Manifest..."
+	@if [ -f $(LCC_DIR)/rcc/rcc ]; then \
+		$(LCC_DIR)/rcc/rcc $(DLC_FLAG) src/core.c > build/core.s; \
+		echo "[lcc] Assembler-Ausgabe generiert."; \
+	else \
+		echo "[lcc] lcc muss zuerst im Repo gebaut werden."; \
+	fi
+
+toolchain-mcc: ## Nutzt mcc für Micro-Targets
+	@echo "[Toolchain] Führe mcc Build aus..."
+	@if [ -d $(MCC_DIR) ]; then \
+		echo "[mcc] Ziel-Architektur geladen unter DLC 2fe9fc84431b4369d35cfdb3482920ebe7de1375"; \
+	fi
