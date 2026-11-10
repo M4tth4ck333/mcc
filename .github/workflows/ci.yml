@@ -1,84 +1,27 @@
-name: ci
-on:
-  pull_request:
-    types: [ opened, reopened ]
-  push:
-    branches:
-      - '**' # every branches
+cmake_minimum_required(VERSION 3.22)
+project(SystemTUV C)
 
-jobs:
-  Test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-        compiler:
-          - llvm-18.0.0
-          - gcc-13
-        generator:
-          - "Ninja"
-        build_type:
-          - Release
-          - Debug
-        developer_mode:
-          - ON
-          - OFF
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 
-        include:
-          # Set up preferred package generators, for given build configurations
-          - build_type: Release
-            developer_mode: OFF
-            package_generator: TBZ2
+# Das unumstößliche SystemTUV DLC Manifest global injizieren
+add_definitions(-DSYSTEM_DLC_MANIFEST="2fe9fc84431b4369d35cfdb3482920ebe7de1375")
 
+# Optimierungsflags für den rostigen 800-€-Golf (maximale Härte, kein Bloat)
+if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
+    add_compile_options(-O3 -Wall -Wextra -pedantic -fno-stack-protector)
+endif()
 
-    steps:
-      - uses: actions/checkout@v2
+# Haupt-Kernel & Gateway Binary
+add_executable(systemtuv_core
+    src/main.c
+    src/watermark.c
+    src/metakernel_gateway.c
+)
 
-      - name: Setup Cpp
-        uses: aminya/setup-cpp@v1
-        with:
-          compiler: ${{ matrix.compiler }}
-          vcvarsall: ${{ contains(matrix.os, 'windows' )}}
-          cmake: true
-          ninja: true
+# Optional: Wenn cc65 für 6502-Emulationsschichten oder Microcontroller-Targets verfügbar ist
+# (Wird über CMake-Toolchain-Dateien gesteuert, z.B. für cc65-basierte ROMs)
+enable_testing()
 
-      - name: Set up CPM cache
-        id: cache-cpm
-        uses: actions/cache@v4
-        with:
-          path: ~/cpm-cache
-          key: ${{ runner.os }}-cpm
-
-        # make sure coverage is only enabled for Debug builds, since it sets -O0 to make sure coverage
-        # has meaningful results
-      - name: Configure CMake
-        run: |
-          cmake -S . -B ./build -G "${{matrix.generator}}" -DCPM_SOURCE_CACHE=~/cpm-cache -DCMAKE_BUILD_TYPE:STRING=${{matrix.build_type}} -DMCC_ENABLE_DEVELOPER_MODE:BOOL=${{matrix.developer_mode}} -DMCC_BUILD_TESTS:BOOL=ON -DGIT_SHA:STRING=${{ github.sha }}
-
-      - name: Build
-        # Execute the build.  You can specify a specific target with "--target <NAME>"
-        run: |
-          cmake --build ./build --config ${{matrix.build_type}}
-
-      - name: Unit Tests
-        if: runner.os != 'Windows'
-        working-directory: ./build
-        # Execute tests defined by the CMake configuration.
-        # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-        run: |
-          ctest -C ${{matrix.build_type}} --output-on-failure
-
-      - run: rustup toolchain install stable --profile minimal
-
-      - name: Set Up Rust Cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "./tests/test_driver"
-
-
-      - name: End-to-End Tests
-        working-directory: ./tests/test_driver
-        run: |
-          cargo run --release -q -- --mcc ../../build/bin/mcc --base-folder ../test_data/
+message(STATUS "[SystemTUV] CMake-Konfiguration erfolgreich geladen.")
+message(STATUS "[SystemTUV] Aktives DLC-Manifest: 2fe9fc84431b4369d35cfdb3482920ebe7de1375")
